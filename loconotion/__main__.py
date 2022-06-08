@@ -15,6 +15,7 @@ if __name__ == "__main__":
         log = main.setup_logging(args)
         parser = main.init_parser(args, log)
         parser.run()
+        parser.minify_css_and_js()
     except KeyboardInterrupt:
         log.critical("Interrupted by user")
         _exit()

@@ -22,6 +22,7 @@ try:
     from selenium.common.exceptions import TimeoutException
     from selenium.webdriver.chrome.options import Options
     from selenium.webdriver.support.ui import WebDriverWait
+    import minify_html
 
     cssutils.log.setLevel(logging.CRITICAL)  # removes warning logs from cssutils
 except ModuleNotFoundError as error:
@@ -147,7 +148,7 @@ class Parser:
         # stringify the url in case it's a Path object
         url = str(url)
 
-        # if no filename specificed, generate an hashed id based the query-less url,
+        # if no filename specified, generate a hashed id based the query-less url,
         # so we avoid re-downloading / caching files we already have
         if not filename:
             parsed_url = urllib.parse.urlparse(url)
@@ -190,9 +191,15 @@ class Parser:
                         if file_extension:
                             destination = destination.with_suffix(file_extension)
 
+                    content = response.content
+
+                    if destination.suffix == ".css" or destination.suffix == ".js" or destination.suffix == ".html":
+                        content = self.minify_css_and_js(str(response.content))
+
                     Path(destination).parent.mkdir(parents=True, exist_ok=True)
+
                     with open(destination, "wb") as f:
-                        f.write(response.content)
+                        f.write(content)
 
                     return destination.relative_to(self.dist_folder)
                 except Exception as error:
@@ -374,7 +381,7 @@ class Parser:
 
         # collection selectors (List, Gallery, etc.) don't work, so remove them
         for collection_selector in soup.findAll(
-            "div", {"class": "notion-collection-view-select"}
+                "div", {"class": "notion-collection-view-select"}
         ):
             collection_selector.decompose()
 
@@ -439,8 +446,8 @@ class Parser:
                 style = cssutils.parseStyle(img["style"])
                 spritesheet = style["background"]
                 spritesheet_url = spritesheet[
-                    spritesheet.find("(") + 1 : spritesheet.find(")")
-                ]
+                                  spritesheet.find("(") + 1: spritesheet.find(")")
+                                  ]
                 cached_spritesheet_url = self.cache_file(
                     f"https://www.notion.so{spritesheet_url}"
                 )
@@ -523,7 +530,7 @@ class Parser:
         # the link to the row item is equal to its data-block-id without dashes
         for table_view in soup.findAll("div", {"class": "notion-table-view"}):
             for table_row in table_view.findAll(
-                "div", {"class": "notion-collection-item"}
+                    "div", {"class": "notion-collection-item"}
             ):
                 table_row_block_id = table_row["data-block-id"]
                 table_row_href = "/" + table_row_block_id.replace("-", "")
@@ -647,12 +654,12 @@ class Parser:
             sub_page_href = a["href"]
             if sub_page_href.startswith("/"):
                 sub_page_href = (
-                    f'{hrefDomain}/{a["href"].split("/")[len(a["href"].split("/"))-1]}'
+                    f'{hrefDomain}/{a["href"].split("/")[len(a["href"].split("/")) - 1]}'
                 )
                 log.info(f"Got this as href {sub_page_href}")
             if sub_page_href.startswith(hrefDomain):
                 if parse_links or not len(
-                    a.find_parents("div", class_="notion-scroller")
+                        a.find_parents("div", class_="notion-scroller")
                 ):
                     # if the link is an anchor link,
                     # check if the page hasn't already been parsed
@@ -662,8 +669,8 @@ class Parser:
                         a["href"] = f"#{sub_page_href_tokens[-1]}"
                         a["class"] = a.get("class", []) + ["loconotion-anchor-link"]
                         if (
-                            sub_page_href in self.processed_pages.keys()
-                            or sub_page_href in subpages
+                                sub_page_href in self.processed_pages.keys()
+                                or sub_page_href in subpages
                         ):
                             log.debug(
                                 f"Original page for anchor link {sub_page_href}"
@@ -709,6 +716,9 @@ class Parser:
             f.write(html_str.encode("utf-8").strip())
         self.processed_pages[url] = html_file
 
+    def minify_css_and_js(self, html_str: str) -> str:
+        return minify_html.minify(html_str, minify_js=True, minify_css=True)
+
     def parse_subpages(self, subpages):
         # parse sub-pages
         if subpages and not self.args.get("single_page", False):
@@ -735,3 +745,6 @@ class Parser:
         log.info(
             f"Finished!\n\nProcessed {len(self.processed_pages)} pages in {formatted_time}"
         )
+
+    def minify_contents(self):
+        Path(self.dist_folder)
